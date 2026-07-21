@@ -1,0 +1,28 @@
+[project]
+name = "python-space"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "ZhengBin-sci", email = "jinbinz.zafu@vip.163.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "contextily>=1.7.1",
+    "geodatasets>=2026.5.1",
+    "matplotlib>=3.11.1",
+    "netcdf4>=1.7.4",
+    "regionmask>=0.13.0",
+    "xarray>=2026.7.0",
+]
+
+[project.scripts]
+python-space = "python_space:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
