@@ -13,7 +13,7 @@ library(multcompView)
 
 # 导入数据 ==================
 
-df <- read.csv("tooth.csv")
+df <- read.csv("ToothGrowth_Analysis/tooth.csv")
 
 str(df) #检查数据结构
 
