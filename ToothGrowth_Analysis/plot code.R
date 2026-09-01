@@ -32,7 +32,7 @@ cld_group <- cld(df.emm_group, Letters = letters)
 # 将 cld 对象转换为数据框
 cld_df <- as.data.frame(cld_group)
 
-ggplot(cld_df, aes(x = dose.factor, y = emmean, fill = supp)) +
+ggplot(cld_df, aes(x = supp, y = emmean, fill = dose.factor)) +
   # 绘制柱子
   geom_col(position = position_dodge(width = 0.8), width = 0.7) +
 
