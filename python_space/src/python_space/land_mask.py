@@ -39,43 +39,53 @@ class LandMaskProcessor:
             "grid_res": self.grid_resolution
         }
 
-    def process_and_export(self, data_array, var_name="value", output_csv=None):
+    def process_and_export(self, data_array, var_name="value",agg_method = 'mean', output_csv=None):
         """
         核心方法：应用掩膜并导出为 DataFrame
-        
-        Parameters:
-            data_array (xr.DataArray): 输入的数据变量 (维度必须包含 lat, lon)
-            var_name (str): 输出 CSV 中数值列的名称
-            output_csv (str, optional): 如果提供路径，则保存为 CSV
-            
-        Returns:
-            pd.DataFrame: 仅包含陆地格点的 DataFrame (列: lon, lat, value)
         """
-        # 1. 确保数据坐标与处理器一致 (防止精度误差导致不匹配)
-        # 这里我们假设传入的 data_array 已经是我们要处理的范围
-        # 如果需要重采样，可以在这里加 .interp()
+        # 【核心新增】如果传入数据的分辨率比设定的 grid_resolution 更精细，则进行降采样
+        # 计算需要粗化的倍数 (假设数据是均匀网格)
+        if len(data_array.lat) > 1:
+            data_res = abs(data_array.lat[1].item() - data_array.lat[0].item())
+            if data_res < self.grid_resolution:
+                factor = round(self.grid_resolution / data_res)
+                if factor > 1:
+                    print(f"[重采样] 检测到原始数据分辨率为 {data_res}°，正在降采样至 {self.grid_resolution}°...")
+                    # 使用 coarsen 进行平均降采样，边界用 trim 截断
+                    coarsen_obj = data_array.coarsen(lat=factor, lon=factor, boundary='trim')
+            
+            # 动态获取聚合方法，如果方法不存在则默认回退到 mean
+            agg_func = getattr(coarsen_obj, agg_method, None)
+            if agg_func is None:
+                print(f"[警告] 不支持的聚合方法 '{agg_method}'，已自动回退为 'mean'")
+                agg_func = coarsen_obj.mean
+                
+            data_array = agg_func()
         
-        # 2. 生成陆地掩膜 (针对当前数据的网格)
+        # 1. 生成陆地掩膜 (针对当前数据的网格)
         mask = self.mask_land.mask(data_array)
         
-        # 3. 应用掩膜：海洋区域变为 NaN
+        # 2. 应用掩膜：海洋区域变为 NaN
         land_only_data = data_array.where(mask.notnull())
         
-        # 4. 转换为 DataFrame 并清洗
-        # stack 会将多维数组压平，dropna 会自动剔除海洋的 NaN 值
+        # 3. 转换为 DataFrame 并清洗
         df = land_only_data.to_dataframe(name=var_name).dropna()
-        
-        # 5. 重置索引，将 lat/lon 从索引变为普通列
         df = df.reset_index()
         
-        # 6. 调整列顺序，让 lon, lat 排在前面，看起来更直观
+        # 4. 调整列顺序
         cols = [c for c in df.columns if c in ['lon', 'lat']] + [var_name]
         df = df[cols]
         
         print(f"[处理完成] 原始格点数: {data_array.size}, 陆地格点数: {len(df)}")
         
-        # 7. 可选：导出 CSV
+        # 5. 可选：导出 CSV
         if output_csv:
+            # 【核心新增】自动创建不存在的目录
+            import os
+            dir_name = os.path.dirname(output_csv)
+            if dir_name and not os.path.exists(dir_name):
+                os.makedirs(dir_name)
+                
             df.to_csv(output_csv, index=False, encoding='utf-8-sig')
             print(f"[已保存] 文件路径: {output_csv}")
             
@@ -93,7 +103,14 @@ class GeoPlotter:
     """
     def __init__(self):
         # 0. 解决中文显示和警告问题
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']
+        plt.rcParams['font.sans-serif'] = [
+                                            'SimHei',              # Windows 黑体
+                                            'Microsoft YaHei',     # Windows 微软雅黑
+                                            'Arial Unicode MS',    # macOS 常见中文字体
+                                            'WenQuanYi Micro Hei', # Linux 常用：文泉驿微米黑
+                                            'WenQuanYi Zen Hei',   # Linux 常用：文泉驿正黑
+                                            'Noto Sans CJK SC'     # Linux 常用：思源黑体 (简体中文)
+                                        ]
         plt.rcParams['axes.unicode_minus'] = False
         
         # 1. 缓存底图数据 (避免每次绘图都重新读取文件，提升性能)
