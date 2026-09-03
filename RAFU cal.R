@@ -10,8 +10,6 @@ library(clinUtils)
 tem_data <- rio::import(
   '18_points_Grid_hourly_tem.csv'
 )
-# 数据结构：每两行为一组，第一行包含日期（V1-V3）和 0-11 时的温度（V4-V15），
-# 第二行包含 12-23 时的温度（V1-V12），且 V13-V15 可能缺失。
 
 # 转换为 data.table
 setDT(tem_data)
@@ -49,10 +47,10 @@ chill.cal <- function(tem, T_low, T_upp, T_op) {
     tem >= T_low & tem < T_op ~ (tem - T_low) / (T_op - T_low),
 
     # 下降段：(上限 - 当前温度) / (上限 - 最适温度)
-    tem >= T_op & tem <= T_upp ~ (T_upp - tem) / (T_upp - T_op),
+    tem >= T_op & tem < T_upp ~ (T_upp - tem) / (T_upp - T_op),
 
     # 无效区间
-    TRUE ~ 0
+    tem >= T_upp | tem < T_low ~ 0
   )
 
   return(chill_unit)
