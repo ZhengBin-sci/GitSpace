@@ -3,31 +3,36 @@ import numpy as np
 import xarray as xr
 from python_space.land_mask import LandMaskProcessor  # 确保文件名是小写
 
-# 1. 实例化
+# 定义分辨率
+resolution = 1.0
+
+# 1. 初始化处理器
 processor = LandMaskProcessor(
     lon_range=(0, 180), 
     lat_range=(0, 90), 
-    grid_resolution=0.5,        
-    mask_resolution='50m'       
+    grid_resolution=resolution, 
+    mask_resolution='50m'
 )
 
-# 2. 模拟或读取你的真实数据
-# 注意：这里模拟的数据必须覆盖 processor 设定的范围
-lon = np.arange(0, 180, 0.1)
-lat = np.arange(0, 90, 0.1)
-# 模拟温度数据
+# 2. 【关键】根据最新的分辨率，重新生成坐标和数据
+lat = processor.lat_coords
+lon = processor.lon_coords
+
+base_random = np.random.rand(len(lat), len(lon))
+lat_gradient = np.linspace(0, 1, len(lat)).reshape(-1, 1)
+temp_data_values = base_random + lat_gradient
+
 temp_data = xr.DataArray(
-    np.random.rand(len(lat), len(lon)), 
+    temp_data_values, 
     dims=["lat", "lon"], 
     coords={"lat": lat, "lon": lon}
 )
 
-# 3. 一键处理并获取 DataFrame
-df_land = processor.process_and_export(
-    data_array=temp_data, 
-    var_name="temperature", 
-    output_csv=r"D:\GitSpace\python_space\output\land_temp_NE.csv"
-)
+"/user_data/lizhijun/ERA5_NH/2m_temperature_daily_mean/2008.nc"
 
-# 4. 查看结果前几行
-print(df_land.head())
+# 3. 处理并导出
+df = processor.process_and_export(
+    temp_data, 
+    var_name="temperature", 
+    output_csv=f"/user_data/zhengjinbin/MyGit/GitSpace/python_space/output/land_temp_{resolution}_NE.csv"
+)
