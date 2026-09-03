@@ -189,7 +189,7 @@ chill.tdoy_res <- chill.tdoy_ori[,
 # 语法格式：X[Y, on = .(连接键), 赋值 := 目标列]
 chill.cal_res[chill.tdoy_ori, tdoy := i.tdoy, on = .(Points, chill_year, thre)]
 
-rafu.cal_filter <- chill.cal_res[doy > tdoy]
+rafu.cal_filter <- chill.cal_res[doy > tdoy & CHcrit != 0]
 
 rafu.cal_filter[,
   GDD := ifelse(mean_temp > 5, yes = mean_temp - 5, 0),
