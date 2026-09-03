@@ -8,13 +8,20 @@ library(clinUtils)
 
 # 2. 读取原始温度数据 =====================
 tem_data <- rio::import(
-  'C:/Users/james/Desktop/RAFU/18_points_Grid_hourly_tem.csv'
+  '18_points_Grid_hourly_tem.csv'
 )
 # 数据结构：每两行为一组，第一行包含日期（V1-V3）和 0-11 时的温度（V4-V15），
 # 第二行包含 12-23 时的温度（V1-V12），且 V13-V15 可能缺失。
 
+# 转换为 data.table
+setDT(tem_data)
+
+# 【新增】批量替换 Points 列中的值：Grid 1 -> Grid01, Grid 18 -> Grid18
+tem_data[,
+  Points := sprintf("Grid%02d", as.numeric(sub("Grid (\\d+)", "\\1", Points)))
+]
+
 # 3. 数据清洗与重塑 =====================
-library(dplyr) # 显式加载（tidyverse 已包含，但为确保）
 
 # 转换为 data.table 以便后续高效操作
 setDT(tem_data)
@@ -160,6 +167,8 @@ chill.crit_res <- chill.crit_ori[,
 ]
 
 # 语法格式：X[Y, on = .(连接键), 赋值 := 目标列]
+chill.crit_ori[chill.crit_res, CHcrit := i.CH.crit, on = .(Points, thre)]
+
 chill.cal_res[chill.crit_res, CHcrit := i.CH.crit, on = .(Points, thre)]
 
 # 8. 筛选达到临界冷量的最早日期 (tdoy) =====================
@@ -171,6 +180,20 @@ chill.tdoy_ori <- chill.cal_filter[,
   by = list(Points, chill_year, thre)
 ]
 
+chill.crit.min_filter <- chill.crit_ori[chill.min >= CHcrit]
+
+chill.crit.min_tdoy <- chill.crit.min_filter[,
+  list(tdoy.late = min(doy)),
+  by = list(Points, thre)
+]
+
+chill.crit.max_filter <- chill.crit_ori[chill.max >= CHcrit]
+
+chill.crit.max_tdoy <- chill.crit.max_filter[,
+  list(tdoy.early = min(doy)),
+  by = list(Points, thre)
+]
+
 chill.tdoy_dcast <- dcast(
   data = chill.tdoy_ori,
   formula = Points + chill_year ~ thre,
@@ -179,9 +202,11 @@ chill.tdoy_dcast <- dcast(
 
 # 按阈值汇总早/晚的 tdoy（跨年份最小和最大）
 chill.tdoy_res <- chill.tdoy_ori[,
-  list(tdoy.early = min(tdoy), tdoy.late = max(tdoy)),
+  list(tdoy.early = min(tdoy), tdoy.mean = mean(tdoy), tdoy.late = max(tdoy)),
   by = list(Points, thre)
 ]
+
+chill.tdoy_res[, cctr := abs(tdoy.late - tdoy.early), ]
 
 # 9. 计算 GDD (生长度日) =====================
 # 对筛选后的数据，当平均温度 >5℃ 时，GDD = 平均温度 - 5，否则为 0
@@ -225,10 +250,65 @@ rafu.sum_dcast <- dcast(
   value.var = 'rafu.max'
 )
 
-# 假设 rafu.sum_dcast 是你的宽表数据
-# 提取除 'thre' 以外的所有列名，并按自然数字顺序排序
-points_cols <- setdiff(names(rafu.sum_dcast), "thre")
-points_cols <- points_cols[gtools::mixedorder(points_cols)]
 
-# 直接在原对象上重排序：将 "thre" 放在最前面，后面跟着排好序的 Grid 列
-setcolorder(rafu.sum_dcast, c("thre", points_cols))
+# output ==================
+
+points_cols.ori <- sprintf('Grid%02d', 1:18) # Grid01, Grid02, ..., Grid18
+
+Points_output <- crossing(Points = points_cols.ori, thre = seq(2, 20, by = 2))
+
+setDT(Points_output)
+
+Points_output[
+  Points_info,
+  ":="(Longitude = i.Longitude, Latitude = i.Latitude),
+  on = .(Points)
+]
+
+Points_output[chill.crit_res, CHcrit := i.CH.crit, on = .(Points, thre)]
+
+Points_output[
+  chill.tdoy_res,
+  ":="(
+    tearly = i.tdoy.early,
+    tmean = i.tdoy.mean,
+    tlate = i.tdoy.late,
+    cctr = i.cctr
+  ),
+  on = .(Points, thre)
+]
+
+Points_output[
+  rafu.sum_res,
+  ":="(RAFUmin = i.rafu.min, RAFUmean = i.rafu.mean, RAFUmax = i.rafu.max),
+  on = .(Points, thre)
+]
+
+# 此时普通字典序就是自然序，直接 setkey 即可
+setorder(Points_output, Points, thre)
+
+clean_output <- Points_output[,
+  .(
+    Points,
+    Longitude,
+    Latitude,
+    Tupp = thre,
+    CHcrit,
+    tearly,
+    tmean,
+    tlate,
+    cctr,
+    RAFUmin,
+    RAFUmean,
+    RAFUmax
+  ),
+]
+
+clean_output[, Points := sub("Grid0*(\\d+)", "Grid \\1", Points)]
+
+clean_output.list <- split(clean_output, by = "Points", keep.by = TRUE)
+
+# purrr::imap(
+#   clean_output.list,
+#   ~ rio::export(.x, file = paste0("output/RAFU.output_", .y, ".csv"))
+# )
