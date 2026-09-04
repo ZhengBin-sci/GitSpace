@@ -7,3 +7,6 @@ Chromium: 148.0.7778.280
 Node.js: 24.18.0
 V8: 14.8.178.38-electron.0
 OS: Windows_NT x64 10.0.26200
+
+因此，解压缩命令是
+tar -xzf positron-reh-linux-x64-2026.09.0-256.tar.gz -C ~/.positron-server/bin/58e9b87506d4132bf7f3340e883f16b4a982c266 --strip-components=1
